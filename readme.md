@@ -1,19 +1,17 @@
-### Index YAML
-python langgraph_rag_agent.py index --yaml_dir ./mappings --model ./rag_index.npz
-### Suggest Mapping
-python langgraph_rag_agent.py suggest --model ./rag_index.npz --csv ./raw.csv --k 5
-
 rag_mapper.py  →  handles model + retrieval logic
 langgraph_rag_agent.py  →  orchestrates workflow and CLI
  
 
 Instructions for usage 
 
-Building the index 
-python langgraph_rag_agent.py index --yaml_dir ./mappings --model ./rag_index.npz
+### Building the index 
+python3 langgraph_rag_agent.py index --yaml_dir ./mappings --model ./rag_index.npz
 
-Testing mapping suggestion functionality
-python langgraph_rag_agent.py suggest --model ./rag_index.npz --csv ./raw.csv
+### Testing mapping suggestion functionality
+python3 langgraph_rag_agent.py suggest --model ./rag_index.npz --csv ../raw.csv --k 5
+
+### Merge additional YAML file into training set
+python langgraph_rag_agent.py merge --yaml_dir ./new_mappings --model rag_index.npz
 
 Expected output
 {

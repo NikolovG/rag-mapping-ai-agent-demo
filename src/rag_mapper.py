@@ -6,6 +6,11 @@ from sklearn.neighbors import NearestNeighbors
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import LabelEncoder
 import joblib
+import os
+
+# Keep track of root directory
+BASE_DIR = os.path.dirname(os.path.dirname(__file__))
+
 
 def _iter_yaml_items(yaml_obj):
     if isinstance(yaml_obj, dict) and "mappings" in yaml_obj:
@@ -28,7 +33,7 @@ def _iter_yaml_items(yaml_obj):
 
 def load_yaml_corpus(yaml_dir):
     docs, labels = [], []
-    for path in glob.glob(os.path.join(yaml_dir, "**/*.y*ml"), recursive=True):
+    for path in glob.glob(os.path.join(BASE_DIR, yaml_dir, "**/*.y*ml"), recursive=True):
         with open(path, "r", encoding="utf-8") as f:
             obj = yaml.safe_load(f)
         if obj is None:

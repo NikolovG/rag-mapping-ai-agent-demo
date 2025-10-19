@@ -6,6 +6,10 @@ from dataclasses import dataclass
 from langgraph.graph import StateGraph, START, END
 import argparse, json
 import pandas as pd
+import os
+
+# Keep track of root directory
+BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 
 from rag_mapper import (
     load_yaml_corpus,
@@ -60,6 +64,17 @@ def node_suggest(state: AgentState) -> AgentState:
     state["log"] = "suggested"
     return state
 
+def node_merge(state: AgentState) -> AgentState:
+    old = load_index(state["model_path"])
+    new_docs, new_labels = load_yaml_corpus(state["yaml_dir"])
+    docs = old._kb_docs + new_docs
+    labels = old._kb_labels + new_labels
+    mapper = RAGMapper().fit(docs, labels)
+    save_index(mapper, state["model_path"])
+    state["result"] = {"merged": len(new_docs), "total": len(docs)}
+    state["log"] = "merged"
+    return state
+
 def router(state: AgentState) -> str:
     return "index" if state["mode"] == "index" else "suggest"
 
@@ -68,6 +83,7 @@ graph = StateGraph(AgentState)
 graph.add_node("index", node_index)
 graph.add_node("suggest", node_suggest)
 graph.add_node("validate", validate)
+graph.add_node("merge", node_merge)
 graph.add_edge(START, "validate")
 graph.add_conditional_edges("validate", router, {"index": "index", "suggest": "suggest"})
 graph.add_edge("index", END)
@@ -75,10 +91,15 @@ graph.add_edge("suggest", END)
 app = graph.compile()
 print(app.get_graph().draw_ascii())
 
+output_dir = os.path.join(BASE_DIR, "outputs")  # or any folder you want
+os.makedirs(output_dir, exist_ok=True)
+
+output_path = os.path.join(output_dir, "langgraph_agent.png")
 png_bytes = app.get_graph().draw_mermaid_png()
-with open("langgraph_agent.png", "wb") as f:
+with open(output_path, "wb") as f:
     f.write(png_bytes)
-print("wrote: langgraph_agent.png")
+
+print(f"wrote: {output_path}")
 
 # --- CLI wrapper ---
 def main():
