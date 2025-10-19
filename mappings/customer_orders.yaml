@@ -1,0 +1,30 @@
+mappings:
+  - source: CustomerName
+    target: customer_name
+    description: "Name of the customer placing the order"
+    synonyms: ["Client", "Buyer", "Account Name"]
+    examples: ["John Doe", "Acme Corp", "Globex LLC"]
+
+  - source: OrderID
+    target: order_id
+    description: "Unique numeric ID of the order"
+    synonyms: ["Order Number", "Invoice ID"]
+    examples: ["1001", "1002", "1003"]
+
+  - source: OrderDate
+    target: order_date
+    description: "Date when the order was placed"
+    synonyms: ["Purchase Date", "Transaction Date"]
+    examples: ["2025-03-01", "2025-04-15"]
+
+  - source: TotalAmount
+    target: total_amount
+    description: "Total price paid by the customer"
+    synonyms: ["Amount", "Price", "Invoice Total"]
+    examples: ["120.50", "999.99", "45.00"]
+
+  - source: ProductName
+    target: product_name
+    description: "Name of the purchased product"
+    synonyms: ["Item", "SKU Name", "Product"]
+    examples: ["Widget A", "Widget B", "Gadget X"]
