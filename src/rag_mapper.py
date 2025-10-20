@@ -11,7 +11,11 @@ import os
 # Keep track of root directory
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 
-
+# Normalize YAML mapping entries into a flat, uniform structure.
+# Accepts a YAML object (dict with "mappings" key or list of items),
+# extracts fields (source, target, description, synonyms, examples),
+# cleans and joins them into text, and yields dictionaries like:
+# {"source": ..., "target": ..., "text": "..."} for valid mappings.
 def _iter_yaml_items(yaml_obj):
     if isinstance(yaml_obj, dict) and "mappings" in yaml_obj:
         items = yaml_obj["mappings"]
@@ -31,6 +35,10 @@ def _iter_yaml_items(yaml_obj):
             continue
         yield {"source": src, "target": tgt, "text": " | ".join([x for x in [src, syns, desc, exs] if x])}
 
+# Recursively load all YAML files under the given directory and extract mapping data.
+# Uses _iter_yaml_items() to normalize each YAML file's mappings, collecting text for embeddings
+# and corresponding target labels. Returns (docs, labels) lists for downstream training or indexing.
+# Raises ValueError if no valid mappings are found.
 def load_yaml_corpus(yaml_dir):
     docs, labels = [], []
     for path in glob.glob(os.path.join(BASE_DIR, yaml_dir, "**/*.y*ml"), recursive=True):
@@ -46,6 +54,10 @@ def load_yaml_corpus(yaml_dir):
         raise ValueError("No mappings found in YAML directory.")
     return docs, labels
 
+# Build a text descriptor summarizing a DataFrame column.
+# Combines the column header, a numeric ratio estimate, and up to N sample values
+# into a single string useful for feature description or schema embedding.
+# Returns a compact representation like: "header:col_name numeric_ratio:0.75 values: ..."
 def build_column_descriptor(header, series, sample_rows=200):
     s = series.dropna().astype(str).head(sample_rows).tolist()
     sample = " ".join(s)
@@ -57,6 +69,16 @@ def build_column_descriptor(header, series, sample_rows=200):
     hint = f" numeric_ratio:{numeric_ratio:.2f}"
     return f"{meta} {hint} values: {sample}"
 
+# RAGMapper: a lightweight retrieval-augmented mapping model.
+# Combines TF-IDF character n-gram vectorization, nearest-neighbor search,
+# and optional logistic regression classification to suggest label mappings.
+
+# Core methods:
+# - __init__: sets up vectorizer, neighbor model, classifier, and label encoder.
+# - fit(docs, labels): trains all components and stores vectorized knowledge base.
+# - retrieve(query_vec): finds nearest neighbor documents by cosine similarity.
+# - suggest(column_text): encodes query, retrieves similar entries, optionally
+#   refines with classifier probabilities, and ranks label suggestions by score.
 class RAGMapper:
     def __init__(self, n_neighbors=8, max_features=50000):
         self.vec = TfidfVectorizer(analyzer="char_wb", ngram_range=(3,5), min_df=1, max_features=max_features)
@@ -109,7 +131,10 @@ class RAGMapper:
         out.sort(key=lambda x: x[1], reverse=True)
         return out[:k_return]
     
-
+# Serialize and save the trained RAGMapper components to disk as a .npz file.
+# Stores vectorizer, nearest-neighbor model, optional classifier, label encoder,
+# and knowledge base docs/labels for later reuse or inference loading.
+# Returns the output file path.
 def save_index(mapper: RAGMapper, path="rag_index.npz"):
     joblib.dump({
         "vec": mapper.vec,
@@ -121,6 +146,10 @@ def save_index(mapper: RAGMapper, path="rag_index.npz"):
     }, path)
     return path
 
+# Load a saved RAGMapper model from disk and reconstruct its state.
+# Restores vectorizer, nearest-neighbor model, optional classifier, label encoder,
+# and knowledge base data, then rebuilds the vectorized document matrix.
+# Marks the mapper as fitted and returns the ready-to-use RAGMapper instance.
 def load_index(path="rag_index.npz") -> RAGMapper:
     bundle = joblib.load(path)
     m = RAGMapper()

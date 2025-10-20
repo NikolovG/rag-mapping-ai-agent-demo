@@ -19,7 +19,10 @@ from rag_mapper import (
     load_index,
 )
 
-# --- LangGraph state and nodes ---
+# TypedDict defining the runtime state for the RAG agent.
+# Tracks execution mode ("index" or "suggest"), file paths, parameters,
+# and results during processing. Used for consistent state management
+# across agent operations.
 class AgentState(TypedDict):
     mode: str                       # "index" or "suggest"
     yaml_dir: Optional[str]
@@ -32,6 +35,9 @@ class AgentState(TypedDict):
     result: Dict[str, Any]
     log: str
 
+# Validate that the AgentState configuration is consistent with its mode.
+# Ensures "index" mode has a YAML directory and "suggest" mode has a CSV path.
+# Raises ValueError on invalid or incomplete state; otherwise returns it unchanged.
 def validate(state: AgentState) -> AgentState:
     if state["mode"] not in {"index", "suggest"}:
         raise ValueError("mode must be 'index' or 'suggest'")
@@ -41,6 +47,10 @@ def validate(state: AgentState) -> AgentState:
         raise ValueError("csv_path required for suggest")
     return state
 
+# Build and save a RAG index from YAML mappings.
+# Loads text-label pairs, trains a RAGMapper, serializes the model to disk,
+# and updates AgentState with output metadata (model path, counts, log status).
+# Returns the updated state.
 def node_index(state: AgentState) -> AgentState:
     docs, labels = load_yaml_corpus(state["yaml_dir"])
     mapper = RAGMapper().fit(docs, labels)
@@ -49,6 +59,10 @@ def node_index(state: AgentState) -> AgentState:
     state["log"] = "indexed"
     return state
 
+# Generate mapping suggestions for each CSV column using a trained RAG index.
+# Loads the saved RAGMapper, builds text descriptors for columns, queries the model,
+# and stores ranked target suggestions with scores in AgentState["result"].
+# Updates log status and returns the modified state.
 def node_suggest(state: AgentState) -> AgentState:
     mapper = load_index(state["model_path"])
     df = pd.read_csv(state["csv_path"], sep=state["delimiter"])
@@ -64,6 +78,10 @@ def node_suggest(state: AgentState) -> AgentState:
     state["log"] = "suggested"
     return state
 
+# Merge new YAML mappings into an existing RAG index.
+# Loads the previous model, appends new docs and labels, retrains a fresh RAGMapper,
+# saves the updated index, and records merge statistics in AgentState.
+# Returns the updated state.
 def node_merge(state: AgentState) -> AgentState:
     old = load_index(state["model_path"])
     new_docs, new_labels = load_yaml_corpus(state["yaml_dir"])
@@ -75,34 +93,44 @@ def node_merge(state: AgentState) -> AgentState:
     state["log"] = "merged"
     return state
 
+# Simple routing function that selects the next processing node name
+# based on the AgentState mode. Returns "index" or "suggest".
 def router(state: AgentState) -> str:
     return "index" if state["mode"] == "index" else "suggest"
 
-# Build graph
-graph = StateGraph(AgentState)
-graph.add_node("index", node_index)
-graph.add_node("suggest", node_suggest)
-graph.add_node("validate", validate)
-graph.add_node("merge", node_merge)
-graph.add_edge(START, "validate")
-graph.add_conditional_edges("validate", router, {"index": "index", "suggest": "suggest"})
-graph.add_edge("index", END)
-graph.add_edge("suggest", END)
-app = graph.compile()
-print(app.get_graph().draw_ascii())
+# Construct and compile the RAG agent workflow graph.
+# Defines processing nodes (validate, index, suggest, merge) and control flow:
+# START → validate → (index or suggest via router) → END.
+# Returns the compiled StateGraph app ready for execution.
+def build_app(state_schema=AgentState) -> Any:
+    graph = StateGraph(state_schema)
+    graph.add_node("index", node_index)
+    graph.add_node("suggest", node_suggest)
+    graph.add_node("validate", validate)
+    graph.add_node("merge", node_merge)
+    graph.add_edge(START, "validate")
+    graph.add_conditional_edges("validate", router, {"index": "index", "suggest": "suggest"})
+    graph.add_edge("index", END)
+    graph.add_edge("suggest", END)
+    return graph.compile()
 
-output_dir = os.path.join(BASE_DIR, "outputs")  # or any folder you want
-os.makedirs(output_dir, exist_ok=True)
-
-output_path = os.path.join(output_dir, "langgraph_agent.png")
-png_bytes = app.get_graph().draw_mermaid_png()
-with open(output_path, "wb") as f:
-    f.write(png_bytes)
-
-print(f"wrote: {output_path}")
+# Render and save a visual diagram of the compiled LangGraph app.
+# Generates a Mermaid-based PNG showing node and edge structure,
+# writes it to the specified output directory, and returns the file path.
+def export_app_diagram(app, out_dir, basename="langgraph_agent"):
+    os.makedirs(out_dir, exist_ok=True)
+    png_path = os.path.join(out_dir, f"{basename}.png")
+    with open(png_path, "wb") as f:
+        f.write(app.get_graph().draw_mermaid_png())
+    return png_path
 
 # --- CLI wrapper ---
 def main():
+    app = build_app()
+    print(app.get_graph().draw_ascii())
+    png_path = export_app_diagram(app, os.path.join(BASE_DIR, "outputs"))
+    print(f"wrote: {png_path}")
+    
     p = argparse.ArgumentParser(description="LangGraph RAG agent (local, pure Python)")
     sub = p.add_subparsers(dest="cmd", required=True)
 
