@@ -6,10 +6,14 @@ from dataclasses import dataclass
 from langgraph.graph import StateGraph, START, END
 import argparse, json
 import pandas as pd
+import uuid, time
 import os
 
 # Keep track of root directory
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
+REVIEW_DIR = os.path.join(BASE_DIR, "review_queue")
+
+os.makedirs(REVIEW_DIR, exist_ok=True)
 
 from rag_mapper import (
     load_yaml_corpus,
@@ -34,6 +38,113 @@ class AgentState(TypedDict):
     restrict_to_retrieved: bool
     result: Dict[str, Any]
     log: str
+
+def node_human_review(state: AgentState) -> AgentState:
+    review_id = str(uuid.uuid4())
+    payload = {
+        "review_id": review_id,
+        "timestamp": int(time.time()),
+        "mode": state["mode"],
+        "csv_path": state.get("csv_path"),
+        "suggestions": state["result"],  # {col: [{target, score, retrieval_sim, clf_prob}, ...]}
+        "notes": state.get("log", "")
+    }
+    with open(os.path.join(REVIEW_DIR, f"{review_id}.json"), "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+
+    state["result"]["review_id"] = review_id
+    state["log"] = "awaiting_human_review"
+    return state
+
+
+def node_apply_human_decisions(state: AgentState) -> AgentState:
+    review_id = state["result"].get("review_id")
+    if not review_id:
+        raise ValueError("review_id missing")
+
+    dpath = os.path.join(REVIEW_DIR, f"{review_id}.decision.json")
+    if not os.path.exists(dpath):
+        # No decision yet → route back to human review or pause
+        state["log"] = "waiting_for_decision"
+        return state
+
+    with open(dpath, "r", encoding="utf-8") as f:
+        decision = json.load(f)
+
+    accepted = {c: t for c, t in decision["decisions"].items() if t}
+    rejected = [c for c, t in decision["decisions"].items() if t is None]
+
+    state["result"]["post_validation"] = {
+        "accepted": accepted,
+        "issues": {"rejected": rejected} if rejected else {}
+    }
+    state["log"] = "human_review_applied"
+    return state
+
+def router_after_validation(state: AgentState) -> str:
+    """Route after post-suggestion validation.
+
+    Returns:
+        - "validation_error" if issues exist (e.g., low confidence or collisions)
+        - "done" if all mappings are clean and valid
+    """
+    v = state["result"].get("post_validation", {})
+    issues = v.get("issues", {})
+    return "validation_error" if issues else "done"
+
+def node_validate_suggestions(state: AgentState) -> AgentState:
+    """
+    Validate model-generated mapping suggestions deterministically.
+
+    Checks:
+      - Minimum score, similarity, and classifier probability thresholds.
+      - Top-2 score margin to detect ambiguous mappings.
+      - Collision detection for duplicate target assignments.
+    Writes:
+      state["result"]["post_validation"] = {"accepted": {...}, "issues": {...}}
+    """
+    cfg = state["result"].get("validation_cfg", {
+        "min_score": 0.55,
+        "min_sim": 0.40,
+        "min_prob": 0.20,
+        "min_margin": 0.05
+    })
+
+    suggestions = state.get("result", {})  # {col: [ {target, score, retrieval_sim, clf_prob}, ...]}
+    issues, accepted = {}, {}
+
+    for col, suggs in suggestions.items():
+        # keep suggestions above thresholds
+        valid = [
+            s for s in suggs
+            if s["score"] >= cfg["min_score"]
+            and s["retrieval_sim"] >= cfg["min_sim"]
+            and s.get("clf_prob", 1.0) >= cfg["min_prob"]
+        ]
+        if not valid:
+            issues[col] = {"reason": "no_valid_suggestion"}
+            continue
+
+        valid.sort(key=lambda x: x["score"], reverse=True)
+        # top-2 margin check
+        if len(valid) > 1 and (valid[0]["score"] - valid[1]["score"]) < cfg["min_margin"]:
+            issues[col] = {"reason": "ambiguous_top2"}
+            continue
+
+        accepted[col] = valid[0]["target"]
+
+    # collision detection (multiple columns → same target)
+    inverse = {}
+    for col, tgt in accepted.items():
+        inverse.setdefault(tgt, []).append(col)
+    collisions = {t: c for t, c in inverse.items() if len(c) > 1}
+    if collisions:
+        issues["collisions"] = collisions
+
+    state["result"]["post_validation"] = {"accepted": accepted, "issues": issues}
+    state["log"] = "post_validated"
+    return state
+
 
 # Validate that the AgentState configuration is consistent with its mode.
 # Ensures "index" mode has a YAML directory and "suggest" mode has a CSV path.
@@ -112,6 +223,35 @@ def build_app(state_schema=AgentState) -> Any:
     graph.add_conditional_edges("validate", router, {"index": "index", "suggest": "suggest"})
     graph.add_edge("index", END)
     graph.add_edge("suggest", END)
+
+    # new nodes
+    graph.add_node("validate_suggestions", node_validate_suggestions)
+    graph.add_node("human_review", node_human_review)
+    graph.add_node("apply_human_decisions", node_apply_human_decisions)
+    graph.add_node("validation_error", lambda s: {**s, "log": "blocked_by_post_validation"})
+
+    # 2) edges
+    graph.add_edge(START, "validate")
+    graph.add_edge("index", END)
+    graph.add_edge("suggest", "validate_suggestions")
+
+    graph.add_conditional_edges(
+        "validate_suggestions",
+        router_after_validation,  # must be defined
+        {"validation_error": "human_review", "done": END}
+    )
+
+    graph.add_edge("human_review", "apply_human_decisions")
+    graph.add_edge("apply_human_decisions", END)
+    # optional merge path if you use it:
+    # graph.add_edge("index", "merge"); graph.add_edge("merge", END)
+    # graph.add_node("human_review", node_human_review)
+    # graph.add_node("apply_human_decisions", node_apply_human_decisions)
+    # graph.add_conditional_edges("validate_suggestions", router_after_validation,
+    #     {"validation_error": "human_review", "done": END})
+    # graph.add_edge("human_review", "apply_human_decisions")
+    # graph.add_edge("apply_human_decisions", END)
+
     return graph.compile()
 
 # Render and save a visual diagram of the compiled LangGraph app.
@@ -130,7 +270,7 @@ def main():
     print(app.get_graph().draw_ascii())
     png_path = export_app_diagram(app, os.path.join(BASE_DIR, "outputs"))
     print(f"wrote: {png_path}")
-    
+
     p = argparse.ArgumentParser(description="LangGraph RAG agent (local, pure Python)")
     sub = p.add_subparsers(dest="cmd", required=True)
 
