@@ -1,0 +1,5 @@
+mappings:
+  - { name: "employer", ftype: "string", field: 1, raw_field_name: "Employer Name", target: "Employer Name" }
+  - { name: "groupid", ftype: "string", field: 1, raw_field_name: "Employer Group ID" }
+  - { name: "member_id", ftype: "string", field: 1, raw_field_name: "Member ID" }
+  - { name: "member_ssn", ftype: "string", field: 1, raw_field_name: "Member SSN" }
