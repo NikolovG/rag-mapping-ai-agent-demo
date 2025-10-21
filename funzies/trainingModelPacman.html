@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Pac-like eats files (synced)</title>
+<style>
+:root{
+  --bg:#0b1a2b;
+  --pac:#ffd34d;
+  --doc:#e9ecef;
+  --doc-edge:#c9ced6;
+
+  --n:6;                 /* number of files */
+  --dur:9s;              /* full run time */
+  --seg:calc(var(--dur)/var(--n));     /* time per file segment */
+  --chomp:0.35turn;      /* mouth open angle */
+  --size:110px;          /* pac diameter */
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;height:100svh;display:grid;place-items:center;background:var(--bg);color:#cbd5e1;
+  font:14px/1.35 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+}
+
+/* Stage */
+.stage{
+  position:relative;width:min(900px,92vw);aspect-ratio:16/9;border-radius:18px;overflow:hidden;
+  background:radial-gradient(120% 120% at 50% 50%,#0b2138 0 40%,transparent 41%) no-repeat,var(--bg);
+}
+
+/* Lane: pac and files share the same coordinate space */
+.lane{
+  position:absolute; left:5%; right:5%; bottom:42%;
+  height:var(--size); display:block;
+}
+
+/* Files: straight line, evenly spaced */
+.files{
+  position:absolute; inset:0;
+  display:flex; align-items:center; justify-content:space-between;
+  pointer-events:none;
+}
+
+/* File icon */
+.file{
+  width:56px;height:72px;position:relative;background:var(--doc);
+  border:1.5px solid var(--doc-edge);border-radius:8px;box-shadow:0 2px 0 0 #d6dbe3 inset;
+  /* each file has its own one-shot timeline per loop; it disappears exactly at its segment midpoint */
+  animation:eaten var(--dur) linear infinite both;
+  will-change:opacity,transform;
+}
+.file:before{
+  content:"";position:absolute;right:-1.5px;top:-1.5px;
+  border:0 solid transparent;border-right-width:16px;border-bottom-width:16px;border-right-color:var(--doc-edge);
+  filter:brightness(1.05)
+}
+.file:after{
+  content:"";position:absolute;left:10px;right:10px;top:30px;height:6px;background:var(--doc-edge);
+  box-shadow:0 12px 0 0 var(--doc-edge);opacity:.8;border-radius:3px
+}
+
+/* assign index k = 0..N-1 and delay so vanish at t = (k + 0.5)*seg */
+.files .file:nth-child(1){ --k:0; animation-delay:calc((var(--k) + .5) * var(--seg)) }
+.files .file:nth-child(2){ --k:1; animation-delay:calc((var(--k) + .5) * var(--seg)) }
+.files .file:nth-child(3){ --k:2; animation-delay:calc((var(--k) + .5) * var(--seg)) }
+.files .file:nth-child(4){ --k:3; animation-delay:calc((var(--k) + .5) * var(--seg)) }
+.files .file:nth-child(5){ --k:4; animation-delay:calc((var(--k) + .5) * var(--seg)) }
+.files .file:nth-child(6){ --k:5; animation-delay:calc((var(--k) + .5) * var(--seg)) }
+
+/* Pac-like character */
+.pac{
+  position:absolute; top:0; left:0; width:var(--size); height:var(--size);
+  background:var(--pac); border-radius:50%; filter:drop-shadow(0 8px 12px rgba(0,0,0,.25));
+  /* move across the lane; start half a segment early so mid-chomp aligns with first file */
+  animation:move var(--dur) linear infinite both;
+  animation-delay:calc(var(--seg) * -0.5);
+}
+.pac:before{ /* eye */
+  content:""; position:absolute; width:12px; height:12px; top:22%; left:58%; background:var(--bg); border-radius:50%;
+}
+.pac:after{  /* mouth wedge, synced with segments; fully open at 50% of each seg */
+  content:""; position:absolute; inset:0; margin:auto; width:55%; height:55%;
+  background:conic-gradient(from 0turn,var(--bg) 0 0.5turn,transparent 0);
+  transform-origin:10% 50%; clip-path:polygon(0% 50%,100% 0%,100% 100%);
+  animation:chomp var(--seg) ease-in-out infinite;
+  animation-delay:calc(var(--seg) * -0.5);
+}
+
+/* Ground line */
+.ground{
+  position:absolute; left:5%; right:5%; bottom:44%;
+  height:2px; background:#16314d; box-shadow:0 6px 0 0 rgba(0,0,0,.08)
+}
+
+/* Keyframes */
+@keyframes move{
+  from{ left:0 }
+  to  { left:calc(100% - var(--size)) }
+}
+/* Slow open to 50%, then close; period = seg */
+@keyframes chomp{
+  0%   { transform:rotate(calc(var(--chomp)*-1)) }
+  50%  { transform:rotate(var(--chomp)) }    /* fully open */
+  100% { transform:rotate(calc(var(--chomp)*-1)) }
+}
+/* A file is visible until its own timeline hits 50%, then disappears.
+   Using 'both' keeps it hidden for the remainder of the global loop. */
+@keyframes eaten{
+  0%,49.9% { opacity:1; transform:scale(1) }
+  50%,100% { opacity:0; transform:scale(0.85) }
+}
+
+@media (prefers-reduced-motion:reduce){
+  .pac{ animation-duration:calc(var(--dur)*1.5) }
+  .pac:after{ animation-duration:calc(var(--seg)*1.5) }
+  .file{ animation-duration:calc(var(--dur)*1.5) }
+}
+</style>
+</head>
+<body>
+  <div class="stage">
+    <div class="ground"></div>
+
+    <div class="lane" aria-label="Pac-like circle moves left to right eating a line of file icons in sync">
+      <div class="files">
+        <div class="file" aria-hidden="true"></div>
+        <div class="file" aria-hidden="true"></div>
+        <div class="file" aria-hidden="true"></div>
+        <div class="file" aria-hidden="true"></div>
+        <div class="file" aria-hidden="true"></div>
+        <div class="file" aria-hidden="true"></div>
+      </div>
+      <div class="pac" aria-hidden="true"></div>
+    </div>
+  </div>
+</body>
+</html>
