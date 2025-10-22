@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Onboarding & Data Quality Agent</title>
+  <style>
+    :root {
+      --bg: #0b0c10;
+      --panel: #12141a;
+      --muted: #8b94a7;
+      --text: #e6eaf2;
+      --accent: #5b8cff;
+      --accent-weak: #2b3b6a;
+      --ok: #25a866;
+      --warn: #e0a800;
+      --bad: #d9534f;
+      --border: #1e2230;
+      --shadow: 0 8px 24px rgba(0,0,0,0.35);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      background: radial-gradient(1200px 800px at 20% -10%, #1b2030 0%, var(--bg) 40%);
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .app {
+      max-width: 1200px;
+      margin: 24px auto 64px;
+      padding: 0 16px;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .title {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: .2px;
+    }
+
+    /* Tabs */
+    .tabs {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0,1fr));
+      gap: 8px;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 6px;
+      box-shadow: var(--shadow);
+    }
+    .tab {
+      list-style: none;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      justify-content: center;
+      padding: 10px 12px;
+      background: linear-gradient(180deg, #171a22 0%, #12141a 100%);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--muted);
+      cursor: pointer;
+      user-select: none;
+      transition: transform .08s ease, border-color .2s ease, color .2s ease, box-shadow .2s ease;
+      text-align: center;
+      font-weight: 600;
+      font-size: 13px;
+    }
+    .tab:hover { border-color: #2a2f42; }
+    .tab.active {
+      color: var(--text);
+      border-color: #2a3150;
+      box-shadow: 0 0 0 1px #2a3150 inset, 0 8px 18px rgba(23, 43, 77, .35);
+    }
+    .tab .idx {
+      width: 22px; height: 22px; flex: 0 0 22px;
+      display: grid; place-items: center;
+      border-radius: 50%;
+      background: var(--accent-weak);
+      color: white; font-size: 12px; font-weight: 700;
+    }
+    .tab.active .idx { background: var(--accent); }
+
+    /* Panels layout */
+    .panel {
+      margin-top: 16px;
+      background: linear-gradient(180deg, #141722 0%, #10131a 100%);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+      padding: 16px;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 360px 1fr;
+      gap: 16px;
+    }
+    @media (max-width: 980px) { .grid-2 { grid-template-columns: 1fr; } }
+
+    .subhead { font-size: 13px; color: var(--muted); margin: 6px 0 14px; }
+    .h6 { font-size: 14px; font-weight: 700; margin: 0 0 8px; }
+
+    /* Left column */
+    .card {
+      background: #0f1220;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+    }
+    label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 8px; }
+    select, input[type="text"], button, .btn {
+      appearance: none;
+      background: #0c1020;
+      color: var(--text);
+      border: 1px solid #23283a;
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 14px;
+    }
+    select:focus, input:focus, button:focus { outline: 2px solid var(--accent-weak); }
+
+    .fields {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      background: #0b1022;
+      border: 1px dashed #2a2f46;
+      border-radius: 10px;
+      padding: 10px 12px;
+      max-height: 320px;
+      overflow: auto;
+      line-height: 1.5;
+      font-size: 12px;
+      white-space: pre;
+    }
+
+    /* Right column */
+    .toolbar { display: flex; align-items: center; gap: 10px; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 10px;
+      font-weight: 600; cursor: pointer;
+    }
+    .btn.primary { background: var(--accent); border-color: transparent; }
+    .btn.ghost   { background: #0c1020; }
+
+    .checkline { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+    .checkline input { width: 16px; height: 16px; }
+
+    .tablewrap {
+      margin-top: 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+      background: #0a0e18;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    thead { background: #0e1222; }
+    th, td { padding: 8px 10px; border-bottom: 1px solid #1a1f31; text-align: left; }
+    tbody tr:hover { background: rgba(255,255,255,0.03); }
+
+    .stats {
+      display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 8px; margin-top: 10px;
+      color: var(--muted); font-size: 12px;
+    }
+    .chip { padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: #0e1222; }
+
+    .footerline {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px;
+    }
+    .next { color: var(--text); text-decoration: none; font-weight: 700; }
+    .next .arrow { color: var(--accent); }
+
+    /* Views hidden by tab */
+    .view { display: none; }
+    .view.active { display: block; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="title">Onboarding & Data Quality Agent</div>
+    </header>
+
+    <nav class="tabs" role="tablist">
+      <div class="tab active" data-tab="upload" role="tab" aria-controls="view-upload"><span class="idx">1</span> Upload</div>
+      <div class="tab" data-tab="mapping" role="tab" aria-controls="view-mapping"><span class="idx">2</span> Semantic Mapping</div>
+      <div class="tab" data-tab="quality" role="tab" aria-controls="view-quality"><span class="idx">3</span> Data Quality</div>
+      <div class="tab" data-tab="rules" role="tab" aria-controls="view-rules"><span class="idx">4</span> Rules / Teaching</div>
+      <div class="tab" data-tab="review" role="tab" aria-controls="view-review"><span class="idx">5</span> Review & Export</div>
+    </nav>
+
+    <!-- Upload View -->
+    <section id="view-upload" class="view active">
+      <div class="panel">
+        <div class="subhead">1) Upload</div>
+        <div class="grid-2">
+          <!-- Left column: Schema -->
+          <div>
+            <div class="h6">Schema</div>
+            <div class="card">
+              <label for="schema">Select predefined schema</label>
+              <select id="schema">
+                <option value="med_claims" selected>med_claims</option>
+                <option value="dental_claims">dental_claims</option>
+                <option value="rx_claims">rx_claims</option>
+              </select>
+
+              <div style="height:10px"></div>
+              <label>fields:</label>
+              <pre id="fieldList" class="fields" aria-live="polite">- clm_id
+- subscriber_id
+- svc_from
+- svc_to
+- paid_date
+- bill_npi
+- rend_npi
+- pos
+- cpt
+- mod1
+- dx1
+- units
+- allowed
+- plan_paid
+- member_resp
+</pre>
+            </div>
+          </div>
+
+          <!-- Right column: Dataset -->
+          <div>
+            <div class="h6">Dataset (CSV)</div>
+            <div class="card">
+              <div class="toolbar">
+                <!-- <button class="btn primary" type="button" id="upload_csv_btn">Upload file</button> -->
+                <!doctype html><meta charset="utf-8">
+<title>CSV Upload + Preview</title>
+<h1>CSV Upload</h1>
+
+<input id="file_input" type="file" accept=".csv,text/csv" hidden>
+<button class="btn primary" type="button" id="upload_csv_btn">Upload file</button>
+<p id="status"></p>
+<div id="preview"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<script>
+const uploadBtn = document.getElementById("upload_csv_btn");
+const fileInput = document.getElementById("file_input");
+const statusEl = document.getElementById("status");
+const previewEl = document.getElementById("preview");
+
+let selectedFile = null;
+
+// Click button opens file picker
+uploadBtn.addEventListener("click", () => fileInput.click());
+
+// Parse + upload file after selection
+fileInput.addEventListener("change", async () => {
+  const file = fileInput.files[0];
+  if (!file) return;
+  selectedFile = file;
+  statusEl.textContent = "Previewing file...";
+
+  // Show preview
+  Papa.parse(file, {
+    header: true,
+    dynamicTyping: true,
+    preview: 50,
+    skipEmptyLines: true,
+    complete: res => renderTable(res.meta.fields, res.data),
+    error: err => statusEl.textContent = "Parse error: " + err
+  });
+    // Upload to backend
+    const form = new FormData();
+    form.append("csv", file, file.name);
+    try {
+        const r = await fetch("/api/upload", { method: "POST", body: form });
+        const j = await r.json();
+        statusEl.textContent = r.ok && j.ok
+        ? `Uploaded to server: ${j.saved_to}`
+        : `Upload failed`;
+    } catch {
+        statusEl.textContent = "Network error during upload.";
+    }
+    });
+
+    function renderTable(headers, rows) {
+    const table = document.createElement("table");
+    table.border = "1"; table.cellPadding = "6";
+    const thead = table.createTHead();
+    const tr = thead.insertRow();
+    headers.forEach(h => {
+        const th = document.createElement("th");
+        th.textContent = h;
+        tr.appendChild(th);
+    });
+    const tbody = table.createTBody();
+    rows.forEach(r => {
+        const tr = tbody.insertRow();
+        headers.forEach(h => tr.insertCell().textContent = r[h] ?? "");
+    });
+    previewEl.innerHTML = "<h3>Preview (first 50 rows)</h3>";
+    previewEl.appendChild(table);
+    }
+    </script>
+
+                <label class="checkline"><input id="demoToggle" type="checkbox" checked /> Use demo dataset</label>
+              </div>
+
+              <div class="tablewrap" role="region" aria-label="Dataset preview" tabindex="0">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>clm_id</th>
+                      <th>subscriber_id</th>
+                      <th>svc</th>
+                      <th>svc_to</th>
+                      <th>paid_date</th>
+                      <th>bill_npi</th>
+                      <th>rend_npi</th>
+                      <th>pos</th>
+                      <th>cpt</th>
+                      <th>units</th>
+                      <th>plan_paid</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tbody">
+                    <!-- rows injected by JS for clarity and brevity -->
+                  </tbody>
+                </table>
+              </div>
+
+              <div class="stats">
+                <div class="chip">%↑ 0</div>
+                <div class="chip">Null % 0.2</div>
+                <div class="chip">Unique 0.9</div>
+                <div class="chip">Rows 1,000</div>
+              </div>
+
+              <div class="footerline">
+                <div style="color: var(--ok); font-size: 13px;">Loaded 18 fields from schema ‘med_claims’</div>
+                <a class="next" href="#" data-next="mapping">Next step: Go to <span class="arrow">Semantic Mapping →</span></a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Placeholder Views for other tabs. Keep structure parallel so you can wire content later. -->
+    <section id="view-mapping" class="view">
+      <div class="panel">
+        <div class="subhead">2) Semantic Mapping</div>
+        <p style="color: var(--muted); margin: 0;">Static placeholder. Add your mapping UI here: left = detected columns, right = schema targets, center = links.</p>
+      </div>
+    </section>
+
+    <section id="view-quality" class="view">
+      <div class="panel">
+        <div class="subhead">3) Data Quality</div>
+        <p style="color: var(--muted); margin: 0;">Static placeholder. Add rules, null checks, type validation, range checks, and preview of failed rows.</p>
+      </div>
+    </section>
+
+    <section id="view-rules" class="view">
+      <div class="panel">
+        <div class="subhead">4) Rules / Teaching</div>
+        <p style="color: var(--muted); margin: 0;">Static placeholder. Add examples, transformations, and saved “teach” snippets.</p>
+      </div>
+    </section>
+
+    <section id="view-review" class="view">
+      <div class="panel">
+        <div class="subhead">5) Review & Export</div>
+        <p style="color: var(--muted); margin: 0;">Static placeholder. Add summary, diffs, downloadable CSV, and export actions.</p>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    // Minimal JS: tab switching and demo table rows
+    const tabs = document.querySelectorAll('.tab');
+    const views = document.querySelectorAll('.view');
+
+    function setActive(tabName) {
+      tabs.forEach(t => t.classList.toggle('active', t.dataset.tab === tabName));
+      views.forEach(v => v.classList.toggle('active', v.id === `view-${tabName}`));
+    }
+
+    tabs.forEach(t => t.addEventListener('click', () => setActive(t.dataset.tab)));
+
+    document.querySelectorAll('[data-next]')
+      .forEach(el => el.addEventListener('click', (e) => { e.preventDefault(); setActive(el.dataset.next); }));
+
+    // Inject demo rows
+    const rows = [
+      ['00187910','002337320','2.1','20','10225718','455','6092','28','99213','1','84.32'],
+      ['00288752','003468020','2.1','20','10225718','455','6092','12','93000','1','20.00'],
+      ['00518512','005185129','2.1','20','10229718','455','6092','26','71260','1','43.90'],
+      ['00626720','006257208','50','25','10230771','452','3300','14','99214','2','122.10'],
+      ['00518512','004948123','23','D','10235718','570','4200','52','12002','1','250.00'],
+      ['00518512','004948123','55','06','10230771','567','4200','34','72148','1','190.50'],
+      ['00519512','004101034','37','D','10235718','425','3760','32','99203','1','60.00']
+    ];
+
+    const tbody = document.getElementById('tbody');
+    tbody.innerHTML = rows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join('')}</tr>`).join('');
+
+    // Optional: update field list by schema (mock)
+    const schemaToFields = {
+      med_claims: ['clm_id','subscriber_id','svc_from','svc_to','paid_date','bill_npi','rend_npi','pos','cpt','mod1','dx1','units','allowed','plan_paid','member_resp'],
+      dental_claims: ['claim_id','member_id','tooth','surface','dos','provider_npi','cpt','units','charge','paid','copay'],
+      rx_claims: ['rx_id','member_id','ndc','fill_date','qty','days_supply','pharmacy_npi','amount_paid']
+    };
+
+    const fieldList = document.getElementById('fieldList');
+    document.getElementById('schema').addEventListener('change', (e) => {
+      const list = (schemaToFields[e.target.value] || []).map(f => `- ${f}`).join('\n');
+      fieldList.textContent = list + (list ? '\n' : '');
+    });
+  </script>
+</body>
+</html>

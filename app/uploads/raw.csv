@@ -1,0 +1,4 @@
+Client,Order Number,Purchase Date,Amount,Item
+Acme Corp,1001,2025-01-12,250.00,Widget A
+Globex LLC,1002,2025-02-10,125.00,Widget B
+John Doe,1003,2025-03-05,500.00,Gadget X

@@ -2,6 +2,9 @@
 import os, json, glob
 import streamlit as st
 from pathlib import Path
+from uploader import save_uploaded_csv
+from run_agent import res2
+
 placeholder = st.empty()
 
 # 1) Use the SAME dir as the producer. Make it absolute.
@@ -10,18 +13,24 @@ BASE_DIR = Path(__file__).resolve().parent
 REVIEW_DIR = (BASE_DIR.parent / "review_queue").resolve()
 
 
-st.title("RAG Mapping – Human Review")
+st.title("Client Onboarding AI Agent")
 
 # 2) Debug panel
-st.caption(f"cwd: {os.getcwd()}")
-st.caption(f"REVIEW_DIR: {REVIEW_DIR}")
-st.caption(f"exists: {os.path.exists(REVIEW_DIR)}  isdir: {os.path.isdir(REVIEW_DIR)}")
+# st.caption(f"cwd: {os.getcwd()}")
+# st.caption(f"REVIEW_DIR: {REVIEW_DIR}")
+# st.caption(f"exists: {os.path.exists(REVIEW_DIR)}  isdir: {os.path.isdir(REVIEW_DIR)}")
 
-print("Looking at review path - ")
-print(BASE_DIR)
+# print("Looking at review path - ")
+# print(BASE_DIR)
 
-print("Looking at path - ")
-print(REVIEW_DIR)
+# print("Looking at path - ")
+# print(REVIEW_DIR)
+uploaded = st.file_uploader("Upload CSV", type="csv")
+if uploaded:
+    res2()
+    from uploader import save_uploaded_csv
+    path = save_uploaded_csv(uploaded.getvalue())
+    print("flag!")
 
 # 3) Autorefresh so new files appear
 if st.button("Refresh"):
@@ -53,6 +62,7 @@ except Exception as e:
         os.remove(path)
     st.stop()
 
+st.header("Semantic Mapping")
 # 7) Render suggestions
 st.subheader(f"Review ID: {payload.get('review_id','<none>')}")
 suggestions = payload.get("suggestions", {})
@@ -77,6 +87,7 @@ for col, suggs in suggestions.items():
     decisions[col] = None if choice == "<reject>" else suggs[labels.index(choice)]["target"]
 
 if st.button("Submit decisions"):
+    # Call OpenAI LLM Logic here
     out = {
         "review_id": payload.get("review_id"),
         "decisions": decisions,
@@ -86,3 +97,7 @@ if st.button("Submit decisions"):
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, indent=2)
     st.success(f"Saved: {out_path}")
+    
+
+st.header("Data Quality, Rules, & Teaching")
+# Call OpenAI LLM Logic here
